@@ -129,8 +129,23 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
             # Иначе вычисляем направление луча света
             if light.type_of_light == 2:
                 light_ray_direction = light.position - point_on_sphere
+                t_max = 1
             else:
                 light_ray_direction = light.direction
+                t_max = np.Inf
+
+            # Проверка наличия тени
+            shadow_sphere, shadow_t = closest_intersection(
+                point_on_sphere,
+                light_ray_direction,
+                0.000000001,
+                t_max
+            )
+
+            # Если есть объект, который создает
+            # тень, то ничего не прибавляем
+            if shadow_sphere is not None:
+                continue
 
             # Диффузный (рассеянный) свет
             l_dot_n = np.dot(light_ray_direction, normal_to_point)
@@ -157,13 +172,14 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
 
     return i
 
-# Главная функция трассировки
-def trace_ray(camera_position, direction, t_min, t_max):
+# Функция поиска пересечения
+# луча с ближайшим объектом
+def closest_intersection(start_point, direction, t_min, t_max):
     closest_t = t_max
     closest_obj = None
 
     for obj in scene.objects:
-        t1, t2 = intersect_ray_sphere(camera_position, direction, obj.object_on_scene)
+        t1, t2 = intersect_ray_sphere(start_point, direction, obj.object_on_scene)
         if t_min <= t1 < t_max and t1 < closest_t:
             closest_t = t1
             closest_obj = obj
@@ -171,19 +187,29 @@ def trace_ray(camera_position, direction, t_min, t_max):
             closest_t = t2
             closest_obj = obj
 
+    return closest_obj, closest_t
+
+# Главная функция трассировки
+def trace_ray(camera_position, direction, t_min, t_max):
+    # Ищем ближайший объект, с которым
+    # пересекается луч и расстояние до него
+    closest_obj, closest_t = closest_intersection(camera_position, direction, t_min, t_max)
+
     if closest_obj is None:
         return BACKGROUND_COLOR
 
     point_on_sphere = camera_position + closest_t * direction
     normal_to_point = point_on_sphere - closest_obj.object_on_scene.center
-    normal_to_point = normal_to_point / norm(normal_to_point)
-    return \
-        closest_obj.object_on_scene.color * compute_lighting(
-            point_on_sphere,
-            normal_to_point,
-            -direction,
-            closest_obj.object_on_scene.specular
-        )
+
+    # Нормализуем нормаль к точке
+    normal_to_point /= norm(normal_to_point)
+
+    return closest_obj.object_on_scene.color * compute_lighting(
+        point_on_sphere,
+        normal_to_point,
+        -direction,
+        closest_obj.object_on_scene.specular
+    )
 
 
 
