@@ -35,10 +35,14 @@ pg.display.set_icon(pg.image.load("icon.jpg"))
 
 # Функция, которая по координатам пикселя задает ему цвет
 def paintPixel(x_coord: int, y_coord: int, pixel_color):
-    pixel_array[C_w_half + x_coord, C_h_half - y_coord] = tuple(pixel_color)
+    # f - функция, которая приводит все значения большие 255 к 255.
+    f = np.vectorize(lambda x1: min(x1, 255))
+    pixel_array[C_w_half + x_coord, C_h_half - y_coord] = tuple(f(pixel_color))
 
 
-# Камера - точка начала лучей
+# Камера - точка начала лучей, изначально
+# камера направлена в сторону оси Z, ось X
+# направлена вправо, ось Y влево.
 camera = np.array([0, 0, 0])
 
 
@@ -48,6 +52,7 @@ class Sphere:
     center: np.array
     radius: float
     color: np.array
+    specular: int
 
 
 # Класс света, тип света 1 означает общий свет,
@@ -82,9 +87,11 @@ scene = Scene(
         Light(3, 0.2, None, np.array([1, 4, 4]))
     ],
     objects=[
-        Object(1, Sphere(np.array([0, -1, 3]), 1, np.array([255, 0, 0]))),
-        Object(1, Sphere(np.array([2, 0, 4]), 1, np.array([0, 0, 255]))),
-        Object(1, Sphere(np.array([-2, 0, 4]), 1, np.array([0, 255, 0])))
+        Object(1, Sphere(np.array([0, -1, 3]), 1, np.array([255, 0, 0]), 500)),
+        Object(1, Sphere(np.array([2, 0, 4]), 1, np.array([0, 0, 255]), 500)),
+        Object(1, Sphere(np.array([-2, 0, 4]), 1, np.array([0, 255, 0]), 10)),
+        Object(1, Sphere(np.array([0, -5001, 0]), 5000, np.array([255, 255, 0]), 1000))
+
     ]
 )
 
@@ -108,7 +115,7 @@ def intersect_ray_sphere(camera_position, direction, sphere):
     return t1, t2
 
 # Функция вычисления освещенности точки
-def compute_lighting(point_on_sphere, normal_to_point):
+def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular):
     # Коэффициент яркости
     i = 0.
 
@@ -125,6 +132,7 @@ def compute_lighting(point_on_sphere, normal_to_point):
             else:
                 light_ray_direction = light.direction
 
+            # Диффузный (рассеянный) свет
             l_dot_n = np.dot(light_ray_direction, normal_to_point)
 
             if l_dot_n > 0:
@@ -133,6 +141,19 @@ def compute_lighting(point_on_sphere, normal_to_point):
                 # то вычисляем коэффициент как интенсивность света
                 # умноженное на косинус угла падения луча.
                 i += light.intensity*l_dot_n/(norm(normal_to_point) * norm(light_ray_direction))
+
+            # Акцентный (направленный) свет
+            if specular != -1:
+                # Если объект имеет свойство зеркальности,
+                # то вычисляем направление отражения луча света
+                reflection_direction = 2*normal_to_point*np\
+                    .dot(normal_to_point, light_ray_direction) - light_ray_direction
+
+                # Вычисляем косинус между лучем отражения и лучем из камеры в точку
+                r_dot_c = np.dot(reflection_direction, camera_to_point)
+                if r_dot_c > 0:
+                    i += light.intensity * \
+                         (r_dot_c / (norm(reflection_direction) * norm(camera_to_point)))**specular
 
     return i
 
@@ -156,7 +177,13 @@ def trace_ray(camera_position, direction, t_min, t_max):
     point_on_sphere = camera_position + closest_t * direction
     normal_to_point = point_on_sphere - closest_obj.object_on_scene.center
     normal_to_point = normal_to_point / norm(normal_to_point)
-    return closest_obj.object_on_scene.color * compute_lighting(point_on_sphere, normal_to_point)
+    return \
+        closest_obj.object_on_scene.color * compute_lighting(
+            point_on_sphere,
+            normal_to_point,
+            -direction,
+            closest_obj.object_on_scene.specular
+        )
 
 
 
