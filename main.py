@@ -14,7 +14,9 @@ C_h = 500
 C_h_half = C_h // 2
 C_w_to_C_h = C_w / C_h
 FPS = 30
-BACKGROUND_COLOR = np.array([255, 255, 255])
+recursion_depth = 3
+eps = 0.0001
+BACKGROUND_COLOR = np.array([0, 0, 0])
 
 # Окно игры
 screen = pg.display.set_mode((C_w, C_h))
@@ -43,8 +45,12 @@ def paintPixel(x_coord: int, y_coord: int, pixel_color):
 # Камера - точка начала лучей, изначально
 # камера направлена в сторону оси Z, ось X
 # направлена вправо, ось Y влево.
-camera = np.array([0, 0, 0])
-
+camera = np.array([3, 0, 1])
+camera_rotation = np.array(
+    [[0.7071, 0, -0.7071],
+    [0, 1, 0],
+    [0.7071, 0,  0.7071]]
+)
 
 # Класс сферы, задается центром и радиусом
 @dataclass
@@ -53,6 +59,7 @@ class Sphere:
     radius: float
     color: np.array
     specular: int
+    reflective: float
 
 
 # Класс света, тип света 1 означает общий свет,
@@ -87,13 +94,17 @@ scene = Scene(
         Light(3, 0.2, None, np.array([1, 4, 4]))
     ],
     objects=[
-        Object(1, Sphere(np.array([0, -1, 3]), 1, np.array([255, 0, 0]), 500)),
-        Object(1, Sphere(np.array([2, 0, 4]), 1, np.array([0, 0, 255]), 500)),
-        Object(1, Sphere(np.array([-2, 0, 4]), 1, np.array([0, 255, 0]), 10)),
-        Object(1, Sphere(np.array([0, -5001, 0]), 5000, np.array([255, 255, 0]), 1000))
+        Object(1, Sphere(np.array([0, -1, 3]), 1, np.array([255, 0, 0]), 500, 0.2)),
+        Object(1, Sphere(np.array([2, 0, 4]), 1, np.array([0, 0, 255]), 500, 0.3)),
+        Object(1, Sphere(np.array([-2, 0, 4]), 1, np.array([0, 255, 0]), 10, 0.4)),
+        Object(1, Sphere(np.array([0, -5001, 0]), 5000, np.array([255, 255, 0]), 1000, 0.5))
 
     ]
 )
+
+# Функция, вычисляющая отраженный луч относительно нормали
+def reflect_ray_direction(light_ray_direction, normal_to_point):
+    return 2*normal_to_point*np.dot(normal_to_point, light_ray_direction) - light_ray_direction
 
 # Поиск пересечения луча со сферой
 def intersect_ray_sphere(camera_position, direction, sphere):
@@ -138,7 +149,7 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
             shadow_sphere, shadow_t = closest_intersection(
                 point_on_sphere,
                 light_ray_direction,
-                0.000000001,
+                eps,
                 t_max
             )
 
@@ -161,8 +172,7 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
             if specular != -1:
                 # Если объект имеет свойство зеркальности,
                 # то вычисляем направление отражения луча света
-                reflection_direction = 2*normal_to_point*np\
-                    .dot(normal_to_point, light_ray_direction) - light_ray_direction
+                reflection_direction = reflect_ray_direction(light_ray_direction, normal_to_point)
 
                 # Вычисляем косинус между лучем отражения и лучем из камеры в точку
                 r_dot_c = np.dot(reflection_direction, camera_to_point)
@@ -190,7 +200,7 @@ def closest_intersection(start_point, direction, t_min, t_max):
     return closest_obj, closest_t
 
 # Главная функция трассировки
-def trace_ray(camera_position, direction, t_min, t_max):
+def trace_ray(camera_position, direction, t_min, t_max, rec_depth):
     # Ищем ближайший объект, с которым
     # пересекается луч и расстояние до него
     closest_obj, closest_t = closest_intersection(camera_position, direction, t_min, t_max)
@@ -204,12 +214,26 @@ def trace_ray(camera_position, direction, t_min, t_max):
     # Нормализуем нормаль к точке
     normal_to_point /= norm(normal_to_point)
 
-    return closest_obj.object_on_scene.color * compute_lighting(
+    # Значение отражения объекта
+    reflective = closest_obj.object_on_scene.reflective
+    local_color = closest_obj.object_on_scene.color * compute_lighting(
         point_on_sphere,
         normal_to_point,
         -direction,
         closest_obj.object_on_scene.specular
     )
+
+    # Если глубина отражения равна 0 или
+    # объект не отражающий, то возвращаем цвет
+    if rec_depth <= 0 or reflective <= 0:
+        return local_color
+
+    # Рассчитываем цвет отражения
+    reflect_ray_d = reflect_ray_direction(-direction, normal_to_point)
+    reflected_color = trace_ray(point_on_sphere, reflect_ray_d, eps, np.Inf, rec_depth - 1)
+
+    # Возвращаем цвет с учетом отражения
+    return local_color * (1 - reflective) + reflected_color * reflective
 
 
 
@@ -221,10 +245,10 @@ while True:
     for x in range(-C_w_half, C_w_half):
         for y in range(-C_h_half + 1, C_h_half):
             # ray_direction - направление луча (z = 1, так как экран расположен на расстоянии 1)
-            ray_direction = np.array([x/C_h, y/C_h, 1])
+            ray_direction = np.dot(camera_rotation, np.array([x/C_h, y/C_h, 1]))
 
             # трассируем луч для определения цвета пикселя
-            color = trace_ray(camera, ray_direction, 1, np.Inf)
+            color = trace_ray(camera, ray_direction, 1, np.Inf, recursion_depth)
 
             # Прорисовываем пиксель
             paintPixel(x, y, color)
