@@ -1,11 +1,7 @@
 from dataclasses import dataclass
-import pygame as pg
 import numpy as np
 from numpy.linalg import norm
-import sys
-
-# Инициализация PyGame
-pg.init()
+from PIL import Image
 
 # Константы
 C_w = 500
@@ -13,44 +9,20 @@ C_w_half = C_w // 2
 C_h = 500
 C_h_half = C_h // 2
 C_w_to_C_h = C_w / C_h
-FPS = 30
 recursion_depth = 3
 eps = 0.0001
 BACKGROUND_COLOR = np.array([0, 0, 0])
 
-# Окно игры
-screen = pg.display.set_mode((C_w, C_h))
-screen.fill(BACKGROUND_COLOR)
-
-# Список для прямого доступа к пикселям окна
-pixel_array = pg.PixelArray(screen)
-
-# Ограничение количества кадров в секунду
-clock = pg.time.Clock()
-
-# Название приложения
-pg.display.set_caption("Ray Tracer")
-
-# Иконка приложения
-pg.display.set_icon(pg.image.load("icon.jpg"))
-
-
-# Функция, которая по координатам пикселя задает ему цвет
-def paintPixel(x_coord: int, y_coord: int, pixel_color):
-    # f - функция, которая приводит все значения большие 255 к 255.
-    f = np.vectorize(lambda x1: min(x1, 255))
-    pixel_array[C_w_half + x_coord, C_h_half - y_coord] = tuple(f(pixel_color))
-
-
 # Камера - точка начала лучей, изначально
 # камера направлена в сторону оси Z, ось X
 # направлена вправо, ось Y влево.
-camera = np.array([3, 0, 1])
-camera_rotation = np.array(
+camera1 = np.array([0, 0, 0])
+camera_rot = np.array(
     [[0.7071, 0, -0.7071],
-    [0, 1, 0],
-    [0.7071, 0,  0.7071]]
+     [0, 1, 0],
+     [0.7071, 0, 0.7071]]
 )
+
 
 # Класс сферы, задается центром и радиусом
 @dataclass
@@ -58,7 +30,7 @@ class Sphere:
     center: np.array
     radius: float
     color: np.array
-    specular: int
+    shine: int
     reflective: float
 
 
@@ -79,6 +51,7 @@ class Object:
     type_of_object: int
     object_on_scene: Sphere
 
+
 # Класс сцена, основной объект,
 # который будет прорисовываться на экране
 @dataclass
@@ -86,25 +59,45 @@ class Scene:
     lights: list[Light]
     objects: list[Object]
 
+
 # Сцена с объектами
 scene = Scene(
     lights=[
-        Light(1, 0.2, None, None),
-        Light(2, 0.6, np.array([2, 1, 0]), None),
-        Light(3, 0.2, None, np.array([1, 4, 4]))
+        # Light(1, 0.2, None, None),
+        Light(2, 0.6, np.array([20, 20, -20]), None),
+        Light(3, 0.4, None, np.array([1, 4, 4]))
     ],
     objects=[
-        Object(1, Sphere(np.array([0, -1, 3]), 1, np.array([255, 0, 0]), 500, 0.2)),
-        Object(1, Sphere(np.array([2, 0, 4]), 1, np.array([0, 0, 255]), 500, 0.3)),
-        Object(1, Sphere(np.array([-2, 0, 4]), 1, np.array([0, 255, 0]), 10, 0.4)),
-        Object(1, Sphere(np.array([0, -5001, 0]), 5000, np.array([255, 255, 0]), 1000, 0.5))
+        # Основные шары
+        Object(1, Sphere(np.array([0, -0.5, 4]), 0.8, np.array([255, 255, 255]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 0.5, 4]), 0.6, np.array([255, 255, 255]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 4]), 0.4, np.array([255, 255, 255]), -1, 0.0)),
+        # Нос
+        Object(1, Sphere(np.array([0, 1.2, 3.6]), 0.1, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.55]), 0.09, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.5]), 0.08, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.45]), 0.07, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.40]), 0.06, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.35]), 0.05, np.array([237, 118, 14]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 3.30]), 0.04, np.array([237, 118, 14]), -1, 0.0)),
+        # Глаза
+        Object(1, Sphere(np.array([0.15, 1.35, 3.66]), 0.04, np.array([255, 0, 0]), -1, 0.0)),
+        Object(1, Sphere(np.array([-0.15, 1.35, 3.66]), 0.04, np.array([255, 0, 0]), -1, 0.0)),
+        # Ведро
+        Object(1, Sphere(np.array([0, 1.5, 4]), 0.3, np.array([192, 192, 192]), 10, 0.2)),
+        Object(1, Sphere(np.array([0, 1.55, 4]), 0.3, np.array([192, 192, 192]), 10, 0.2)),
+        Object(1, Sphere(np.array([0, 1.60, 4]), 0.3, np.array([192, 192, 192]), 10, 0.2)),
+        # Поверхность
+        Object(1, Sphere(np.array([0, -5001, 0]), 5000, np.array([255, 255, 255]), -1, 0))
 
     ]
 )
 
+
 # Функция, вычисляющая отраженный луч относительно нормали
 def reflect_ray_direction(light_ray_direction, normal_to_point):
-    return 2*normal_to_point*np.dot(normal_to_point, light_ray_direction) - light_ray_direction
+    return 2 * normal_to_point * np.dot(normal_to_point, light_ray_direction) - light_ray_direction
+
 
 # Поиск пересечения луча со сферой
 def intersect_ray_sphere(camera_position, direction, sphere):
@@ -124,6 +117,7 @@ def intersect_ray_sphere(camera_position, direction, sphere):
     t2 = (-k2 - np.sqrt(discriminant)) / (2 * k1)
 
     return t1, t2
+
 
 # Функция вычисления освещенности точки
 def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular):
@@ -166,7 +160,7 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
                 # (если больше, значит свет достигает задней части поверхности),
                 # то вычисляем коэффициент как интенсивность света
                 # умноженное на косинус угла падения луча.
-                i += light.intensity*l_dot_n/(norm(normal_to_point) * norm(light_ray_direction))
+                i += light.intensity * l_dot_n / (norm(normal_to_point) * norm(light_ray_direction))
 
             # Акцентный (направленный) свет
             if specular != -1:
@@ -178,9 +172,10 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
                 r_dot_c = np.dot(reflection_direction, camera_to_point)
                 if r_dot_c > 0:
                     i += light.intensity * \
-                         (r_dot_c / (norm(reflection_direction) * norm(camera_to_point)))**specular
+                         (r_dot_c / (norm(reflection_direction) * norm(camera_to_point))) ** specular
 
     return i
+
 
 # Функция поиска пересечения
 # луча с ближайшим объектом
@@ -198,6 +193,7 @@ def closest_intersection(start_point, direction, t_min, t_max):
             closest_obj = obj
 
     return closest_obj, closest_t
+
 
 # Главная функция трассировки
 def trace_ray(camera_position, direction, t_min, t_max, rec_depth):
@@ -220,7 +216,7 @@ def trace_ray(camera_position, direction, t_min, t_max, rec_depth):
         point_on_sphere,
         normal_to_point,
         -direction,
-        closest_obj.object_on_scene.specular
+        closest_obj.object_on_scene.shine
     )
 
     # Если глубина отражения равна 0 или
@@ -236,22 +232,23 @@ def trace_ray(camera_position, direction, t_min, t_max, rec_depth):
     return local_color * (1 - reflective) + reflected_color * reflective
 
 
-
-while True:
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
-            sys.exit()
-
+def paint(camera, camera_rotation):
     for x in range(-C_w_half, C_w_half):
         for y in range(-C_h_half + 1, C_h_half):
             # ray_direction - направление луча (z = 1, так как экран расположен на расстоянии 1)
-            ray_direction = np.dot(camera_rotation, np.array([x/C_h, y/C_h, 1]))
+            ray_direction = np.dot(camera_rotation, np.array([x / C_h, y / C_h, 1]))
 
             # трассируем луч для определения цвета пикселя
             color = trace_ray(camera, ray_direction, 1, np.Inf, recursion_depth)
 
             # Прорисовываем пиксель
-            paintPixel(x, y, color)
+            arr[C_w_half + x][C_h_half - y] = f(color)
 
-    clock.tick(FPS)
-    pg.display.flip()
+
+f = np.vectorize(lambda x1: min(x1, 255))
+arr = np.array([[[0, 0, 0] for _ in range(C_w)] for _ in range(C_h)], dtype=np.uint8)
+
+if __name__ == "__main__":
+    paint(camera1, camera_rot)
+    img = Image.fromarray(np.transpose(arr, axes=(1, 0, 2)))
+    img.save("123.jpg")
