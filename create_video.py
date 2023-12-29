@@ -63,7 +63,7 @@ for i in range(240):
 # Создаем видео из кадров
 frame_size = (500, 500)
 out = cv2.VideoWriter("snowman.mp4", cv2.VideoWriter.fourcc(*"mp4v"), 60, frame_size)
-for i in range(0, 120):
+for i in range(0, 240):
     file_name = glob.glob(f"Pictures/{i}.jpg")[0]
     img = cv2.imread(file_name)
     out.write(img)

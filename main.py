@@ -16,7 +16,7 @@ BACKGROUND_COLOR = np.array([0, 0, 0])
 # Камера - точка начала лучей, изначально
 # камера направлена в сторону оси Z, ось X
 # направлена вправо, ось Y влево.
-camera1 = np.array([0, 0, 0])
+camera1 = np.array([4, 0, 0])
 camera_rot = np.array(
     [[0.7071, 0, -0.7071],
      [0, 1, 0],
@@ -68,10 +68,13 @@ scene = Scene(
         Light(3, 0.4, None, np.array([1, 4, 4]))
     ],
     objects=[
+        # Зеркала
+        Object(1, Sphere(np.array([-5, -0.5, 4]), 3.0, np.array([0, 255, 0]), -1, 0.7)),
+        Object(1, Sphere(np.array([0, -0.5, 9]), 3.0, np.array([255, 0, 0]), -1, 0.7)),
         # Основные шары
-        Object(1, Sphere(np.array([0, -0.5, 4]), 0.8, np.array([255, 255, 255]), -1, 0.0)),
-        Object(1, Sphere(np.array([0, 0.5, 4]), 0.6, np.array([255, 255, 255]), -1, 0.0)),
-        Object(1, Sphere(np.array([0, 1.2, 4]), 0.4, np.array([255, 255, 255]), -1, 0.0)),
+        Object(1, Sphere(np.array([0, -0.5, 4]), 0.8, np.array([255, 255, 255]), 10, 0.0)),
+        Object(1, Sphere(np.array([0, 0.5, 4]), 0.6, np.array([255, 255, 255]), 10, 0.0)),
+        Object(1, Sphere(np.array([0, 1.2, 4]), 0.4, np.array([255, 255, 255]), 10, 0.0)),
         # Нос
         Object(1, Sphere(np.array([0, 1.2, 3.6]), 0.1, np.array([237, 118, 14]), -1, 0.0)),
         Object(1, Sphere(np.array([0, 1.2, 3.55]), 0.09, np.array([237, 118, 14]), -1, 0.0)),
@@ -164,11 +167,11 @@ def compute_lighting(point_on_sphere, normal_to_point, camera_to_point, specular
 
             # Акцентный (направленный) свет
             if specular != -1:
-                # Если объект имеет свойство зеркальности,
+                # Если объект имеет свойство блеска,
                 # то вычисляем направление отражения луча света
                 reflection_direction = reflect_ray_direction(light_ray_direction, normal_to_point)
 
-                # Вычисляем косинус между лучем отражения и лучем из камеры в точку
+                # Вычисляем косинус между лучом отражения и лучем из камеры в точку
                 r_dot_c = np.dot(reflection_direction, camera_to_point)
                 if r_dot_c > 0:
                     i += light.intensity * \
@@ -235,7 +238,8 @@ def trace_ray(camera_position, direction, t_min, t_max, rec_depth):
 def paint(camera, camera_rotation):
     for x in range(-C_w_half, C_w_half):
         for y in range(-C_h_half + 1, C_h_half):
-            # ray_direction - направление луча (z = 1, так как экран расположен на расстоянии 1)
+            # ray_direction - направление луча (z = 1,
+            # так как экран расположен на расстоянии 1)
             ray_direction = np.dot(camera_rotation, np.array([x / C_h, y / C_h, 1]))
 
             # трассируем луч для определения цвета пикселя
